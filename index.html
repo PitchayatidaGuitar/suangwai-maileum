@@ -2,7 +2,40 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<!-- PWA Meta Tags -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="สูงวัย ไม่ลืม">
+<meta name="application-name" content="สูงวัย ไม่ลืม">
+<meta name="theme-color" content="#2E7D8C">
+<meta name="description" content="แอปคัดกรองสุขภาพผู้สูงอายุ รพ.สต.ตำบลบ้านกลาง">
+
+<!-- iOS Icons -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232E7D8C'/><text y='72' x='50' text-anchor='middle' font-size='60'>🧠</text></svg>">
+
+<!-- Manifest inline -->
+<script>
+const manifestData = {
+  name: "สูงวัย ไม่ลืม",
+  short_name: "สูงวัย ไม่ลืม",
+  description: "แอปคัดกรองสุขภาพผู้สูงอายุ",
+  start_url: "./",
+  display: "standalone",
+  background_color: "#F0F7FA",
+  theme_color: "#2E7D8C",
+  orientation: "portrait",
+  icons: [
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%232E7D8C'/><text y='140' x='96' text-anchor='middle' font-size='110'>🧠</text></svg>", sizes: "192x192", type: "image/svg+xml" },
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%232E7D8C'/><text y='380' x='256' text-anchor='middle' font-size='300'>🧠</text></svg>", sizes: "512x512", type: "image/svg+xml" }
+  ]
+};
+const blob = new Blob([JSON.stringify(manifestData)], {type:'application/json'});
+const manifestURL = URL.createObjectURL(blob);
+document.write('<link rel="manifest" href="' + manifestURL + '">');
+</script>
 <title>สูงวัย ไม่ลืม</title>
 <style>
   @font-face {
@@ -56,6 +89,11 @@
     --shadow-lg: 0 8px 40px rgba(46,125,140,0.22);
     --radius: 16px;
     --radius-sm: 10px;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2585,22 +2623,33 @@ let userData = {};
 let currentPage = 'home';
 
 // ===== GOOGLE SHEETS CONFIG =====
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQBKrMAQP_XANNdPcg_KopIJWqv7TP-mIZoNLnZjfcTLL24OssB0FTUwuzFLTTsuSJ1A/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjHTvMclvzqutXExDestFP-yEMud4JR3Skvpu2JphTVAK-iiDXAXIpVq5KPvCOTyQYtQ/exec';
 
 async function saveToSheet(type, payload) {
   try {
     const timestamp = new Date().toLocaleString('th-TH', {timeZone:'Asia/Bangkok'});
     const fullPayload = { วันที่บันทึก: timestamp, ...payload };
+    const params = new URLSearchParams();
+    params.append('type', type);
+    params.append('payload', JSON.stringify(fullPayload));
     const resp = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, payload: fullPayload })
+      body: params
     });
-    return true;
+    const result = await resp.json();
+    return result.success === true;
   } catch(err) {
     console.error('Sheet save error:', err);
     return false;
+  }
+}
+
+async function loadFromSheet(idCard) {
+  try {
+    const resp = await fetch(`${APPS_SCRIPT_URL}?sheet=ลงทะเบียน&id=${idCard}`);
+    return await resp.json();
+  } catch(err) {
+    return { found: false };
   }
 }
 
@@ -3608,6 +3657,85 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
+
+// ===== PWA INSTALL PROMPT =====
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallBanner('android');
+});
+
+function showInstallBanner(type) {
+  if (document.getElementById('installBanner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'installBanner';
+  banner.style.cssText = `
+    position:fixed; bottom:80px; left:16px; right:16px; z-index:9998;
+    background:linear-gradient(135deg,#1A5F6E,#2E7D8C);
+    color:white; border-radius:18px; padding:16px 18px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.25);
+    display:flex; align-items:center; gap:14px;
+    animation:slideUp 0.4s ease;
+  `;
+
+  if (type === 'android') {
+    banner.innerHTML = `
+      <div style="font-size:36px;flex-shrink:0;">📲</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:800;margin-bottom:2px;">ติดตั้งแอปบนมือถือ</div>
+        <div style="font-size:12px;opacity:0.85;">กดติดตั้งเพื่อใช้งานได้ง่ายขึ้น</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button onclick="doInstallPWA()" style="background:white;color:#2E7D8C;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:800;font-family:inherit;cursor:pointer;white-space:nowrap;">ติดตั้ง</button>
+        <button onclick="dismissInstallBanner()" style="background:rgba(255,255,255,0.2);color:white;border:none;border-radius:10px;padding:6px 14px;font-size:12px;font-family:inherit;cursor:pointer;">ไม่ใช่ตอนนี้</button>
+      </div>`;
+  } else {
+    // iOS
+    banner.innerHTML = `
+      <div style="font-size:36px;flex-shrink:0;">📲</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:800;margin-bottom:4px;">ติดตั้งบน iPhone/iPad</div>
+        <div style="font-size:12px;opacity:0.9;line-height:1.6;">
+          1. กดปุ่ม <strong>แชร์ 
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white" style="vertical-align:middle;"><path d="M12 2l-3 3h2v8h2V5h2l-3-3zm-7 9v9h14v-9h-2v7H7v-7H5z"/></svg></strong><br>
+          2. เลือก <strong>"Add to Home Screen"</strong><br>
+          3. กด <strong>"Add"</strong>
+        </div>
+      </div>
+      <button onclick="dismissInstallBanner()" style="background:rgba(255,255,255,0.2);color:white;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;flex-shrink:0;align-self:flex-start;">✕</button>`;
+  }
+  document.body.appendChild(banner);
+}
+
+function doInstallPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => { deferredPrompt = null; dismissInstallBanner(); });
+}
+
+function dismissInstallBanner() {
+  const b = document.getElementById('installBanner');
+  if (b) b.remove();
+  sessionStorage.setItem('installDismissed','1');
+}
+
+// ตรวจสอบ iOS
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function isInStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+}
+
+// แสดง banner หลังโหลด 3 วินาที (iOS)
+setTimeout(() => {
+  if (isIOS() && !isInStandaloneMode() && !sessionStorage.getItem('installDismissed')) {
+    showInstallBanner('ios');
+  }
+}, 3000);
+
 </script>
 </body>
 </html>
